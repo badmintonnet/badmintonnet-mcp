@@ -56,7 +56,10 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
           script: |
+            set -e
             cd /var/www/badmintonnet_mcp
-            git pull origin master
+
             docker compose pull badmintonnet-mcp
-            docker compose up -d
+            docker compose up -d --force-recreate --no-deps badmintonnet-mcp
+
+            docker image prune -f
