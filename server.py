@@ -4,6 +4,7 @@ from mcp.server.fastmcp import FastMCP
 from tools.club_tools import find_club_nearby_tools, register_club_tools, join_club_tools
 from tools.club_event_tools import find_event_nearby_tools, join_event_tools, register_club_event_tools
 from tools.profile_tools import find_user_nearby_tools, register_profile_tools
+from tools.recommendation_tools import register_recommendation_tools
 from tools.search_tools import register_search_tools
 from tools.tournament_tools import find_tournament_nearby_tools, register_tournament_tools
 from auth.request_context import set_request_headers
@@ -22,6 +23,7 @@ find_tournament_nearby_tools(mcp)
 find_club_nearby_tools(mcp)
 find_event_nearby_tools(mcp)
 find_user_nearby_tools(mcp)
+register_recommendation_tools(mcp)
 register_search_tools(mcp)
 
 

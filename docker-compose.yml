@@ -1,0 +1,16 @@
+services:
+  badmintonnet-mcp:
+    image: ${DOCKER_IMAGE:-badmintonnet-mcp:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: badmintonnet-mcp
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPORTSNET_API_URL: ${SPORTSNET_API_URL:-http://host.docker.internal:8080/api}
+    ports:
+      - "3001:3001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
