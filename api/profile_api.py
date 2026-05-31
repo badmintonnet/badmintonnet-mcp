@@ -37,7 +37,17 @@ class ProfileAPI:
 
         if res.status_code != 404:
             res.raise_for_status()
-            return res.json()
+            raw = res.json()
+            rating = raw.get("data", raw)
+            if not isinstance(rating, dict):
+                return raw
+            return {
+                "overallScore": rating.get("overallScore"),
+                "averageTechnicalScore": rating.get("averageTechnicalScore"),
+                "skillLevel": rating.get("skillLevel"),
+                "verifyCount": rating.get("verifyCount"),
+                "slug": rating.get("slug"),
+            }
 
         last_response = res
 
@@ -66,7 +76,25 @@ class ProfileAPI:
 
         res.raise_for_status()
 
-        return res.json()
+        raw = res.json()
+        data = raw.get("data", raw)
+        items = data.get("content") if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return raw
+
+        return {
+            "schedules": [
+                {
+                    "name": item.get("name"),
+                    "startTime": item.get("startTime"),
+                    "endTime": item.get("endTime"),
+                    "status": item.get("status"),
+                    "slug": item.get("slug"),
+                }
+                for item in items[:5]
+                if isinstance(item, dict)
+            ]
+        }
     
     def get_nearby_badminton_players(self, access_token=None):
         headers = {}
