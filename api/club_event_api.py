@@ -16,6 +16,39 @@ def _normalize_local_datetime(value: str, is_end: bool = False) -> str:
 
 
 class ClubEventAPI:
+    def _slim_event(self, event: dict):
+        facility = event.get("facility") or {}
+        slug = event.get("slug")
+        return {
+            "id": event.get("id"),
+            "title": event.get("title"),
+            "slug": slug,
+            "url": f"/events/{slug}" if slug else None,
+            "location": (
+                event.get("location")
+                or facility.get("location")
+                or facility.get("address")
+            ),
+            "facilityName": facility.get("name"),
+            "startTime": event.get("startTime"),
+            "endTime": event.get("endTime"),
+            "fee": event.get("fee"),
+            "totalSlot": event.get("totalMember"),
+            "joinedSlot": event.get("joinedMember"),
+            "clubName": event.get("nameClub") or event.get("clubName"),
+            "categories": event.get("categories"),
+            "status": event.get("status"),
+            "distanceKm": event.get("distanceKm"),
+        }
+
+    def _extract_items(self, raw: dict):
+        data = raw.get("data", raw)
+        if isinstance(data, dict):
+            items = data.get("content", [])
+        else:
+            items = data
+        return items if isinstance(items, list) else []
+
     def get_public_club_events(
         self,
         access_token: str | None = None,
@@ -39,90 +72,56 @@ class ClubEventAPI:
 
         params = {
             "page": page,
-            "size": size,
+            "size": min(size, 5),
         }
 
         if search:
             params["search"] = search
-
         if province:
             params["province"] = province
-
         if ward:
             params["ward"] = ward
-
         if quickTimeFilter:
             params["quickTimeFilter"] = quickTimeFilter
-
         if isFree is not None:
             params["isFree"] = isFree
-
         if minFee is not None:
             params["minFee"] = minFee
-
         if maxFee is not None:
             params["maxFee"] = maxFee
-
         if startDate:
             params["startDate"] = _normalize_local_datetime(startDate)
-
         if endDate:
             params["endDate"] = _normalize_local_datetime(endDate, is_end=True)
-
-        payload = advancedFilter if advancedFilter is not None else None
 
         res = requests.post(
             f"{BASE_URL}/club-event/all/public",
             params=params,
-            json=payload,
+            json=advancedFilter if advancedFilter is not None else None,
             headers=headers,
             timeout=10,
         )
 
         res.raise_for_status()
-
         raw = res.json()
-
-        events = raw.get("data", {}).get("content", [])
-
-        slim = []
-
-        for e in events:
-            slim.append({
-                "id": e.get("id"),
-                "title": e.get("title"),
-                "slug": e.get("slug"),
-                "location": e.get("location")
-                    or (e.get("facility") or {}).get("location"),
-                "facilityName": (e.get("facility") or {}).get("name"),
-                "startTime": e.get("startTime"),
-                "endTime": e.get("endTime"),
-                "fee": e.get("fee"),
-                "totalSlot": e.get("totalMember"),
-                "joinedSlot": e.get("joinedMember"),
-                "clubName": e.get("nameClub"),
-                "categories": e.get("categories"),
-                "status": e.get("status"),
-                # ⭐ bonus giúp render link chắc chắn
-                "url": f"/events/{e.get('slug')}" if e.get("slug") else None,
-            })
+        data = raw.get("data", {})
+        events = self._extract_items(raw)
 
         return {
-            "events": slim,
-            "page": raw["data"]["page"],
-            "totalPages": raw["data"]["totalPages"],
-            "last": raw["data"]["last"],
+            "events": [self._slim_event(e) for e in events[:5]],
+            "page": data.get("page"),
+            "totalPages": data.get("totalPages"),
+            "last": data.get("last"),
         }
+
     def join_event(
         self,
         access_token: str,
         event_id: str,
-        
     ):
         headers = {
             "Authorization": f"Bearer {access_token}"
         }
-
 
         res = requests.post(
             f"{BASE_URL}/club-event/join/{event_id}",
@@ -133,7 +132,7 @@ class ClubEventAPI:
         res.raise_for_status()
 
         return res.json()
-    
+
     def get_nearby_club_events(
         self,
         access_token: str,
@@ -141,11 +140,17 @@ class ClubEventAPI:
         headers = {
             "Authorization": f"Bearer {access_token}"
         }
-        
+
         res = requests.get(
             f"{BASE_URL}/club-event/nearby",
-            headers=headers
+            headers=headers,
+            timeout=10,
         )
 
         res.raise_for_status()
-        return res.json()
+        events = self._extract_items(res.json())
+        return {
+            "events": [self._slim_event(e) for e in events[:3]],
+            "total": len(events),
+            "note": "Only first 3 nearby events are returned to keep AI context small.",
+        }

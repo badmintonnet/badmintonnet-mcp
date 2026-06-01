@@ -3,12 +3,43 @@ from config import BASE_URL
 
 
 class TournamentAPI:
+    def _slim_tournament(self, tournament: dict):
+        facility = tournament.get("facility") or {}
+        slug = tournament.get("slug")
+        return {
+            "id": tournament.get("id"),
+            "name": tournament.get("name"),
+            "slug": slug,
+            "url": f"/tournaments/{slug}" if slug else None,
+            "location": (
+                tournament.get("location")
+                or facility.get("location")
+                or facility.get("address")
+            ),
+            "facilityName": facility.get("name"),
+            "startDate": tournament.get("startDate"),
+            "endDate": tournament.get("endDate"),
+            "registrationStartDate": tournament.get("registrationStartDate"),
+            "registrationEndDate": tournament.get("registrationEndDate"),
+            "status": tournament.get("status"),
+            "participationType": tournament.get("participationType"),
+            "fee": tournament.get("fee") or tournament.get("clubRegistrationFee"),
+            "distanceKm": tournament.get("distanceKm"),
+        }
+
+    def _extract_items(self, raw: dict):
+        data = raw.get("data", raw)
+        if isinstance(data, dict):
+            items = data.get("content", [])
+        else:
+            items = data
+        return items if isinstance(items, list) else []
+
     def get_my_club_tournaments(
         self,
         access_token: str | None = None,
         page: int = 0,
         size: int = 5,
-        # content: str | None = None,
         organizationDateFrom: str | None = None,
         organizationDateTo: str | None = None,
     ):
@@ -19,11 +50,8 @@ class TournamentAPI:
 
         params = {
             "page": page,
-            "size": size,
+            "size": min(size, 5),
         }
-
-        # if content:
-        #     params["content"] = content
 
         if organizationDateFrom:
             params["organizationDateFrom"] = organizationDateFrom
@@ -39,40 +67,34 @@ class TournamentAPI:
         )
 
         res.raise_for_status()
-
         raw = res.json()
-
-        # 🔥 FILTER RESPONSE CHO MCP
-        tournaments = raw.get("data", {}).get("content", [])
-
-        slim = []
-        for t in tournaments:
-            slim.append({
-                "id": t.get("id"),
-                "name": t.get("name"),
-                "location": t.get("location"),
-                "startDate": t.get("startDate"),
-                "endDate": t.get("endDate"),
-                "status": t.get("status"),
-                "slug": t.get("slug"),
-                "url": f"/tournaments/{t.get('slug')}" if t.get("slug") else None,
-            })
+        data = raw.get("data", {})
+        tournaments = self._extract_items(raw)
 
         return {
-            "tournaments": slim,
-            "page": raw["data"]["page"],
-            "totalPages": raw["data"]["totalPages"],
+            "tournaments": [self._slim_tournament(t) for t in tournaments[:5]],
+            "page": data.get("page"),
+            "totalPages": data.get("totalPages"),
         }
+
     def get_nearby_badminton_tournaments(
         self,
         access_token: str | None = None,
     ):
         headers = {}
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
 
         res = requests.get(
-            f"{BASE_URL}/club-event/nearby",
-            headers=headers
+            f"{BASE_URL}/tournaments/nearby",
+            headers=headers,
+            timeout=10,
         )
 
         res.raise_for_status()
-        return res.json()
+        tournaments = self._extract_items(res.json())
+        return {
+            "tournaments": [self._slim_tournament(t) for t in tournaments[:3]],
+            "total": len(tournaments),
+            "note": "Only first 3 nearby tournaments are returned to keep AI context small.",
+        }
